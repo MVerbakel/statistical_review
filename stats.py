@@ -253,11 +253,11 @@ def plot_features(df, target_col_str):
 
 # Statistical tests for relationship with target
 
-# Chi-square for cat vs cat
+# # Chi-square for cat vs cat
 
 def chi_squared(df, target_col_str):
     """
-    Returns a cross-tab and chi-squared test for each feature with dtype 'object' or 'str'
+    Returns a cross-tab and chi-squared test for each feature with dtype 'object' or 'str' and plots results
     :param df: Pandas DataFrame with target and categorical columns
     :param target_col_str: name of the target column
     :return: p values for chi-squared test
@@ -265,49 +265,37 @@ def chi_squared(df, target_col_str):
 
     print('Ho: No significant relationship, feature is independent of target')
     print()
+
     categorical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['object', 'str']]
-    chi_dict = {}
 
-    for c in categorical_cols:
-
+    def chi_test(c):
+        print()
         ct = pd.crosstab(df[target_col_str], df[c])
-        ct_dec = ct.apply(lambda r: r/r.sum(), axis=0)*100
-        ct_dec_f = ct_dec.applymap(lambda x: '%.0f' % x)
         chi2, p, dof, expected = scs.chi2_contingency(ct)
-        chi_dict[c] = p
         exp_under_five_percent = np.sum(expected < 5) / len(expected.flat)
 
         if exp_under_five_percent > 0.2:
-            print('Warning: more than 20% of expected values less than 5, results invalid')
+            print('Warning: more than 20% of expected values less than 5, results for {} invalid'.format(c))
         else:
             pass
 
-        print(c)
-        print(' ')
-        print('Outcome by' + ' ' + str(c) + ' ' + '(n)')
         print(ct)
-        print(' ')
-        print('Outcome by' + ' ' + str(c) + ' ' + '(%)')
-        print(ct_dec_f)
-        print(' ')
-        print(c, 'Chi-squared test p value: %.4f' % p)
+        print()
 
         if p < 0.05:
-            print('Significant (95% CI)! Reject null hypothesis, evidence suggests target is dependent on this feature')
-        elif p >= 0.05:
-            print('Insufficient evidence to reject null hypothesis (95% CI). Suggests target and feature independent')
+            print('p = {}\nSignificant (95% CI)! Reject Ho, {} appears dependent on {}'.format(p, target_col_str, c))
         else:
-            print('Error in assessment of p-value')
+            print('p = {}\nInsufficient evidence (95% CI). {} and {} appear independent'.format(p, target_col_str, c))
 
-        print(' ')
+        return p
+
+    chi_dict = {c: chi_test(c) for c in categorical_cols}
 
     chi_df = pd.DataFrame.from_dict(chi_dict, orient='index')
     chi_df.columns = ['p_value']
-
     plt.style.use('fivethirtyeight')
     chi_df['p_value'].sort_values(ascending=True).plot(kind='barh', use_index=True, color='deepskyblue',
                                                        title='Chi-squared Test for Independence with Target')
-
     plt.xlabel('p-value')
     plt.xscale('log')
     p_line = plt.axvline(x=0.05, color='darkorange', label='p-value cut-off', lw=2)
