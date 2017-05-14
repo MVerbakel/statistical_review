@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
-from scipy.stats import sem
 import scipy.stats as scs
 import seaborn as sns
 import brewer2mpl
@@ -11,8 +10,6 @@ plt.style.use('ggplot')
 
 color_options = brewer2mpl.get_map('Paired', 'qualitative', 8).mpl_colors
 
-
-# Print overall stats about the data frame
 
 def df_stats(df):
     """
@@ -23,79 +20,66 @@ def df_stats(df):
     rows_n = df.shape[0]
     columns_n = df.shape[1]
 
-    print()
-    print('The data set contains {} rows and {} columns'.format(rows_n, columns_n))
-    print()
+    print('The data set contains {} rows and {} columns\n'.format(rows_n, columns_n))
     print('Summary:')
     print(df.info())
-    print()
 
     return rows_n, columns_n
 
 
-# Correct data types
-
-# TODO: Handle date formats
-# latest_data['date'] = pd.to_datetime(latest_data['date'], format = "%Y-%m-%d")
-
 def correct_dtypes(df, dtype_dictionary):
     """
-    Takes a dictionary containing feature and data type pairs, and converts the data type
-    in the given DataFrame accordingly
-    :param df: DataFrame containing columns you wish to change the dtype of
+    Corrects data types for features/variables (columns) in a DataFrame. Takes a dictionary containing
+    feature and data type pairs, and converts the data type accordingly
+    :param df: DataFrame containing columns you wish to correct
     :param dtype_dictionary: A dictionary of column_name, dtype pairs (e.g. age: np.int64)
     :return: Returns the original DataFrame with the dtypes corrected
     """
+    # TODO: Handle date formats
+    # latest_data['date'] = pd.to_datetime(latest_data['date'], format = "%Y-%m-%d")
     for key, value in dtype_dictionary.items():
         df[key] = df[key].astype(value)
     return df
 
 
-# Provide stats on the target
-
 def analyse_target(target):
     """
-    Return the count and percentage of cases in each target value
+    Return the count and percentage of cases (rows) in each target category
     :param target: column that contains the variable of interest
     :return: DataFrame with the count and percent
     """
+    # TODO: Add alternate calculations for numerical targets
     counts = pd.DataFrame(target.value_counts())
     full_counts = len(target)
     counts['percent'] = counts/full_counts
     counts.columns = ['count', 'percent']
     counts.sort_values(by=['percent'], ascending=[0])
     print(counts)
-    print()
     return counts
 
 
-# Basic data summary
-
 def describe_data(df):
+    # TODO: Expand to create a nice table visualisation summary of the data
 
     d = df.describe(include='all')
 
     return d
 
 
-# Review NA
-
 def count_na(df):
     """
-    Count null values in columns of a DataFrame
-    :param df: Pandas DataFrame
+    Count missing (null) values in columns of a DataFrame
+    :param df: Pandas DataFrame with missing values read in as nan e.g. pd.read_csv('data.csv', na_values=[np.nan])
     :return: Return both raw count and percentage of null values per column
     """
+    # TODO: Provide a more advanced na imputation using prediction e.g. mice - for training only
+
     na_counts = pd.DataFrame(df.isnull().sum(), columns=['Count'])
     full_counts = len(df)
     percent = na_counts.Count / full_counts
     na_counts['Percent'] = percent
     return na_counts
 
-# TODO: Provide a more advanced na imputation using prediction e.g. mice - for training only
-
-
-# Clean up categorical features for analysis purposes
 
 def clean_cats(df):
     """
@@ -111,8 +95,224 @@ def clean_cats(df):
     return new_df
 
 
-# TODO: Handle date/time features
-# line chart/ bars by month for date
+def single_bar_percent(df, col_name, axs, col_n, row_n):
+    """
+    Creates a bar chart for a Pandas data series, y axis is %
+    :param df: Pandas DataFrame
+    :param col_name: Name of the column to be plotted
+    :param axs: The axes object for plotting
+    :param col_n: Column position in axs object
+    :param row_n: Row position in axs object
+    :return: axes object
+    """
+    value_counts = 100.0 * (df[col_name].value_counts(dropna=False) / len(df[col_name]))
+    unique_val = df[col_name].unique()
+    ind = np.arange(len(unique_val))
+    axs[row_n][col_n].bar(ind, value_counts, align='center', color='deepskyblue')
+    axs[row_n][col_n].set_title(col_name)
+    axs[row_n][col_n].set_xticks(ind)
+    axs[row_n][col_n].set_xticklabels(unique_val)
+    axs[row_n][col_n].set_ylabel('% of total')
+
+    return axs
+
+
+def single_hist(df, col_name, axs, col_n, row_n):
+    """
+    Creates a histogram for a Pandas data series
+    :param df: Pandas DataFrame
+    :param col_name: Name of the column to be plotted
+    :param axs: The axes object for plotting
+    :param col_n: Column position in axs object
+    :param row_n: Row position in axs object
+    :return: axes object
+    """
+    axs[row_n][col_n].hist(df[col_name], color='deepskyblue')
+    axs[row_n][col_n].set_title(col_name)
+    axs[row_n][col_n].set_ylabel('Count')
+
+    return axs
+
+
+def multi_bar_percent(df, col_name, axs, col_n, row_n, target_col_str, target_labels):
+    """
+    Creates a bar chart for a Pandas data series split by another series (target), y axis is %
+    :param df: Pandas DataFrame
+    :param col_name: Name of the column to be plotted
+    :param axs: The axes object for plotting
+    :param col_n: Column position in axs object
+    :param row_n: Row position in axs object
+    :param target_col_str: string name of the column containing the target
+    :param target_labels: list of unique target values (strings)
+    :return: axes object
+    """
+
+    width = 0.3
+    i = 1
+    c = 0
+
+    for l in target_labels:
+        pos = width * i
+        data = df.where(df[target_col_str] == l)
+        unique_val = data[col_name].unique()
+        ind = np.arange(len(unique_val)) + pos
+        value_counts = 100.0 * (data[col_name].value_counts(dropna=False) / len(data[col_name]))
+        axs[row_n][col_n].bar(left=ind, height=value_counts, width=width,
+                              color=color_options[c], label=l)
+        axs[row_n][col_n].set_title(col_name)
+        axs[row_n][col_n].set_xticks(ind)
+        axs[row_n][col_n].set_xticklabels(unique_val)
+        axs[row_n][col_n].set_ylabel('% of total')
+        axs[row_n][col_n].legend()
+        i += 1
+        c += 1
+
+    return axs
+
+
+def multi_hist(df, col_name, axs, col_n, row_n, target_col_str, target_labels):
+    """
+    Creates a histogram for a Pandas data series split by another series (target)
+    :param df: Pandas DataFrame
+    :param col_name: Name of the column to be plotted
+    :param axs: The axes object for plotting
+    :param col_n: Column position in axs object
+    :param row_n: Row position in axs object
+    :param target_col_str: string name of the column containing the target
+    :param target_labels: list of unique target values (strings)
+    :return: axes object
+    """
+    data_by_target = []
+
+    for l in target_labels:
+        data = df.where(df[target_col_str] == l)
+        data = data[~np.isnan(data[col_name])][col_name].as_matrix()
+        data_by_target.append(data)
+
+    axs[row_n][col_n].hist(data_by_target, label=target_labels,
+                           color=color_options[0:len(target_labels)], alpha=0.7)
+    axs[row_n][col_n].set_title(col_name)
+    axs[row_n][col_n].set_ylabel('Count')
+    axs[row_n][col_n].legend()
+
+    return axs
+
+
+def multi_bar_count(df, col_name, axs, col_n, row_n, target_col_str, target_labels):
+    """
+    Creates a bar chart for a Pandas data series split by another series (target), y axis is counts
+    :param df: Pandas DataFrame
+    :param col_name: Name of the column to be plotted
+    :param axs: The axes object for plotting
+    :param col_n: Column position in axs object
+    :param row_n: Row position in axs object
+    :param target_col_str: string name of the column containing the target
+    :param target_labels: list of unique target values (strings)
+    :return: axes object
+    """
+    width = 0.3
+    i = 1
+    c = 0
+
+    for l in target_labels:
+        pos = width * i
+        data = df.where(df[target_col_str] == l)
+        unique_val = data[col_name].unique()
+        ind = np.arange(len(unique_val)) + pos
+        value_counts = data[col_name].value_counts(dropna=False)
+        axs[row_n][col_n].bar(left=ind, height=value_counts, width=width,
+                              color=color_options[c], label=l)
+        axs[row_n][col_n].set_title(col_name)
+        axs[row_n][col_n].set_xticks(ind)
+        axs[row_n][col_n].set_xticklabels(unique_val)
+        axs[row_n][col_n].set_ylabel('Count')
+        axs[row_n][col_n].legend()
+        i += 1
+        c += 1
+
+    return axs
+
+
+def multi_boxplot(df, col_name, axs, col_n, row_n, target_col_str, target_labels):
+    """
+    Creates a boxplot for a Pandas data series split by another series (target)
+    :param df: Pandas DataFrame
+    :param col_name: Name of the column to be plotted
+    :param axs: The axes object for plotting
+    :param col_n: Column position in axs object
+    :param row_n: Row position in axs object
+    :param target_col_str: string name of the column containing the target
+    :param target_labels: list of unique target values (strings)
+    :return: axes object
+    """
+
+    data_by_target = []
+
+    for l in target_labels:
+        data = df.where(df[target_col_str] == l)
+        data = data[~np.isnan(data[col_name])][col_name].as_matrix()
+        data_by_target.append(data)
+
+    fp = dict(marker='o', markersize=5, linestyle='none')
+    mp = dict(marker='D', markersize=5, markerfacecolor='blue')
+    bp = axs[row_n][col_n].boxplot(data_by_target, labels=target_labels, sym='k.', showfliers=True,
+                                   flierprops=fp, showmeans=True, meanline=False, meanprops=mp)
+
+    for b in bp['boxes']:
+        b.set(color='deepskyblue', linewidth=2)
+    for w in bp['whiskers']:
+        w.set(color='deepskyblue', linewidth=2)
+    for cap in bp['caps']:
+        cap.set(color='deepskyblue', linewidth=2)
+    for median in bp['medians']:
+        median.set(color='red', linewidth=2)
+
+    axs[row_n][col_n].set_title(col_name)
+    axs[row_n][col_n].set_ylabel(col_name)
+    l1 = mlines.Line2D([], [], color='blue', marker='D', markersize=5, label='Mean', linestyle='None')
+    l2 = mlines.Line2D([], [], color='red', marker='None', label='Median')
+    l3 = mlines.Line2D([], [], color='black', marker='o', markersize=5, label='Outliers', linestyle='None')
+    axs[row_n][col_n].legend(handles=[l1, l2, l3], loc=9, fontsize=8, ncol=3, frameon=True)
+
+    return axs
+
+
+def create_plot(df, col_name, axs, col_n, row_n, target_col_str, target_labels):
+    """
+    Creates plots to fit into a set of subplots based on the data type and position
+    :param df: Pandas DataFrame
+    :param col_name: Name of the column to be plotted
+    :param axs: The axes object for plotting
+    :param col_n: Column position in axs object
+    :param row_n: Row position in axs object
+    :param target_col_str: string name of the column containing the target
+    :param target_labels: list of unique target values (strings)
+    :return: axes object
+    """
+
+    if col_n is 0 and df[col_name].dtype in ['object', 'str']:
+        single_bar_percent(df, col_name, axs, col_n, row_n)
+
+    elif col_n is 0 and df[col_name].dtype in ['float64', 'int64']:
+        single_hist(df, col_name, axs, col_n, row_n)
+
+    elif col_n is 1 and df[col_name].dtype in ['object', 'str']:
+        multi_bar_percent(df, col_name, axs, col_n, row_n, target_col_str, target_labels)
+
+    elif col_n is 1 and df[col_name].dtype in ['float64', 'int64']:
+        multi_hist(df, col_name, axs, col_n, row_n, target_col_str, target_labels)
+
+    elif col_n is 2 and df[col_name].dtype in ['object', 'str']:
+        multi_bar_count(df, col_name, axs, col_n, row_n, target_col_str, target_labels)
+
+    elif col_n is 2 and df[col_name].dtype in ['float64', 'int64']:
+        multi_boxplot(df, col_name, axs, col_n, row_n, target_col_str, target_labels)
+
+    else:
+        pass
+
+    return axs
+
 
 def plot_features(df, target_col_str):
     """
@@ -122,6 +322,9 @@ def plot_features(df, target_col_str):
     :return: Matrix of plots for features in df
     """
     # TODO: Handle numerical targets
+    # TODO: Handle date/time features
+    # line chart/ bars by month for date
+
     features = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['float64', 'int64', 'object', 'str']]
     target_labels = df[target_col_str].unique()
 
@@ -129,135 +332,19 @@ def plot_features(df, target_col_str):
     columns_n = 3
     fig, axs = plt.subplots(rows_n, columns_n, figsize=(columns_n*4, rows_n*2), sharey=False, sharex=False)
 
-    def create_plot(col_n, row_n, col_name):
-
-        if col_n is 0 and df[col_name].dtype in ['object', 'str']:
-            print(col_name)
-            value_counts = 100.0 * (df[col_name].value_counts(dropna=False) / len(df[col_name]))
-            unique_val = df[col_name].unique()
-            ind = np.arange(len(unique_val))
-            axs[row_n][col_n].bar(ind, value_counts, align='center', color='deepskyblue')
-            axs[row_n][col_n].set_title(col_name)
-            axs[row_n][col_n].set_xticks(ind)
-            axs[row_n][col_n].set_xticklabels(unique_val)
-            axs[row_n][col_n].set_ylabel('% of total')
-
-        elif col_n is 0 and df[col_name].dtype in ['float64', 'int64']:
-            axs[row_n][col_n].hist(df[col_name], color='deepskyblue')
-            axs[row_n][col_n].set_title(col_name)
-            axs[row_n][col_n].set_ylabel('Count')
-
-        elif col_n is 1 and df[col_name].dtype in ['object', 'str']:
-
-            width = 0.3
-            i = 1
-            c = 0
-
-            for l in target_labels:
-                pos = width * i
-                data = df.where(df[target_col_str] == l)
-                unique_val = data[col_name].unique()
-                ind = np.arange(len(unique_val)) + pos
-                value_counts = 100.0 * (data[col_name].value_counts(dropna=False) / len(data[col_name]))
-                axs[row_n][col_n].bar(left=ind, height=value_counts, width=width,
-                                      color=color_options[c],  label=l)
-                axs[row_n][col_n].set_title(col_name)
-                axs[row_n][col_n].set_xticks(ind)
-                axs[row_n][col_n].set_xticklabels(unique_val)
-                axs[row_n][col_n].set_ylabel('% of total')
-                axs[row_n][col_n].legend()
-                i += 1
-                c += 1
-
-        elif col_n is 1 and df[col_name].dtype in ['float64', 'int64']:
-
-            data_by_target = []
-
-            for l in target_labels:
-                data = df.where(df[target_col_str] == l)
-                data = data[~np.isnan(data[col_name])][col_name].as_matrix()
-                data_by_target.append(data)
-
-            axs[row_n][col_n].hist(data_by_target, label=target_labels,
-                                   color=color_options[0:len(target_labels)], alpha=0.7)
-            axs[row_n][col_n].set_title(col_name)
-            axs[row_n][col_n].set_ylabel('Count')
-            axs[row_n][col_n].legend()
-
-        elif col_n is 2 and df[col_name].dtype in ['object', 'str']:
-
-            width = 0.3
-            i = 1
-            c = 0
-
-            for l in target_labels:
-                pos = width * i
-                data = df.where(df[target_col_str] == l)
-                unique_val = data[col_name].unique()
-                ind = np.arange(len(unique_val)) + pos
-                value_counts = data[col_name].value_counts(dropna=False)
-                axs[row_n][col_n].bar(left=ind, height=value_counts, width=width,
-                                      color=color_options[c],  label=l)
-                axs[row_n][col_n].set_title(col_name)
-                axs[row_n][col_n].set_xticks(ind)
-                axs[row_n][col_n].set_xticklabels(unique_val)
-                axs[row_n][col_n].set_ylabel('Count')
-                axs[row_n][col_n].legend()
-                i += 1
-                c += 1
-
-        elif col_n is 2 and df[col_name].dtype in ['float64', 'int64']:
-
-            data_by_target = []
-
-            for l in target_labels:
-                data = df.where(df[target_col_str] == l)
-                data = data[~np.isnan(data[col_name])][col_name].as_matrix()
-                data_by_target.append(data)
-
-            fp = dict(marker='o', markersize=5, linestyle='none')
-            mp = dict(marker='D', markersize=5, markerfacecolor='blue')
-            bp = axs[row_n][col_n].boxplot(data_by_target, labels=target_labels, sym='k.', showfliers=True,
-                                           flierprops=fp, showmeans=True, meanline=False, meanprops=mp)
-
-            for b in bp['boxes']:
-                b.set(color='deepskyblue', linewidth=2)
-            for w in bp['whiskers']:
-                w.set(color='deepskyblue', linewidth=2)
-            for cap in bp['caps']:
-                cap.set(color='deepskyblue', linewidth=2)
-            for median in bp['medians']:
-                median.set(color='red', linewidth=2)
-
-            axs[row_n][col_n].set_title(col_name)
-            axs[row_n][col_n].set_ylabel(col_name)
-            l1 = mlines.Line2D([], [], color='blue', marker='D', markersize=5, label='Mean', linestyle='None')
-            l2 = mlines.Line2D([], [], color='red', marker='None', label='Median')
-            l3 = mlines.Line2D([], [], color='black', marker='o', markersize=5, label='Outliers', linestyle='None')
-            axs[row_n][col_n].legend(handles=[l1, l2, l3], loc=9, fontsize=8, ncol=3, frameon=True)
-
-        else:
-            pass
-            # axs[row_n][col_n].plot(df[col_name])
-            # axs[row_n][col_n].set_title(col_name)
-
-        return axs
-
     for i in range(rows_n):
 
         f = features[i]
 
         for j in range(columns_n):
-            create_plot(j, i, f)
+            create_plot(df=df, col_name=f, axs=axs, col_n=j, row_n=i,
+                        target_col_str=target_col_str, target_labels=target_labels)
 
-
-# Statistical tests for relationship with target
-
-# # Chi-square for cat vs cat
 
 def chi_squared(df, target_col_str):
     """
     Returns a cross-tab and chi-squared test for each feature with dtype 'object' or 'str' and plots results
+    Use to test for a relationship between each categorical feature and a categorical target
     :param df: Pandas DataFrame with target and categorical columns
     :param target_col_str: name of the target column
     :return: p values for chi-squared test
@@ -280,12 +367,11 @@ def chi_squared(df, target_col_str):
             pass
 
         print(ct)
-        print()
 
         if p < 0.05:
-            print('p = {}\nSignificant (95% CI)! Reject Ho, {} appears dependent on {}'.format(p, target_col_str, c))
+            print('\np = {}\nSignificant (95% CI)! Reject Ho, {} appears dependent on {}'.format(p, target_col_str, c))
         else:
-            print('p = {}\nInsufficient evidence (95% CI). {} and {} appear independent'.format(p, target_col_str, c))
+            print('\np = {}\nInsufficient evidence (95% CI). {} and {} appear independent'.format(p, target_col_str, c))
 
         return p
 
@@ -306,11 +392,10 @@ def chi_squared(df, target_col_str):
     return chi_df
 
 
-# num vs num
-
 def correlation_plot(df, ax):
     """
-    Plots the correlation between numerical features in data
+    Plots the correlation between numerical features in the data
+    Use to test for a relationship between each numerical feature
     :param df: Pandas DataFrame
     :param ax: Axes object for figure
     :return: correlations
@@ -330,17 +415,16 @@ def correlation_plot(df, ax):
     return corr
 
 
-# Numerical features vs categorical target
-
-# TODO: 2 sample t-test, or ANOVA depending on n of target categories
-
 def paired_plot(df, target_col_str):
     """
     Plots the relationship between numerical features in data by the target
+    Use to test for a relationship between each numerical feature and a categorical target
     :param df: Pandas DataFrame - recommend limiting the number of features to a max of 10 at a time
     :param target_col_str: Name of the target feature (string format)
     :return: paired plot grid
     """
+    # TODO: 2 sample t-test, or ANOVA depending on n of target categories
+
     numerical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['float64', 'int64']]
     # numerical_cols.append(target_col_str) # not needed if converted to numerical dtype
 

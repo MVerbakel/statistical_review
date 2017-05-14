@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 # Walk-through of standard analysis before modelling
 
 # Set up formatting
-pd.set_option('display.float_format', lambda x: '%.2f' % x)
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
 plt.style.use('ggplot')
 
 # Load data
@@ -65,28 +65,28 @@ for col in example_df:
         example_df[col].fillna(0)
     else:
         example_df[col].fillna('unknown')
-
-# Group infrequent values in categorical features to 'other'
-example_df = stats.clean_cats(example_df)
-
-# Check for relationship between target and other features
-# Numerical vs Numerical - correlation
-f, ax = plt.subplots(figsize=(10, 10))
-correlations = stats.correlation_plot(example_df, ax=ax)
-plt.show()
-
-# Numerical vs Categorical - paired plot
-paired_grid = stats.paired_plot(example_df, target_col_str='Y_2')
-plt.show()
-
-# Categorical vs Categorical - chi squared test of independence
-print()
-print('Chi-squared Test for Independence:')
-chi_square_test = stats.chi_squared(example_df, target_col_str='Y_2')
+#
+# # Group infrequent values in categorical features to 'other'
+# example_df = stats.clean_cats(example_df)
+#
+# # Check for relationship between target and other features
+# # Numerical vs Numerical - correlation
+# f, ax = plt.subplots(figsize=(10, 10))
+# correlations = stats.correlation_plot(example_df, ax=ax)
+# plt.show()
+#
+# # Numerical vs Categorical - paired plot
+# paired_grid = stats.paired_plot(example_df, target_col_str='Y_2')
+# plt.show()
+#
+# # Categorical vs Categorical - chi squared test of independence
+# print()
+# print('Chi-squared Test for Independence:')
+# chi_square_test = stats.chi_squared(example_df, target_col_str='Y_2')
 
 # Visual analysis
 reduced_df = example_df[['Y_2', 'Age_2', 'Balance_2', 'Marital_2', 'Education_2']].copy()
-stats.plot_features(reduced_df, 'Y_2')
+stats.plot_features(df=reduced_df, target_col_str='Y_2')
 plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
 plt.show()
 
