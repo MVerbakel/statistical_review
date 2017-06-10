@@ -6,9 +6,13 @@ import matplotlib.pyplot as plt
 import scipy.stats as scs
 import seaborn as sns
 import brewer2mpl
+from scipy.stats import pointbiserialr
+
 plt.style.use('ggplot')
 
 color_options = brewer2mpl.get_map('Paired', 'qualitative', 8).mpl_colors
+
+# TODO: more statistical tests and assumptions
 
 
 def df_stats(df):
@@ -58,14 +62,6 @@ def analyse_target(target):
     return counts
 
 
-def describe_data(df):
-    # TODO: Expand to create a nice table visualisation summary of the data
-
-    d = df.describe(include='all')
-
-    return d
-
-
 def count_na(df):
     """
     Count missing (null) values in columns of a DataFrame
@@ -73,11 +69,12 @@ def count_na(df):
     :return: Return both raw count and percentage of null values per column
     """
     # TODO: Provide a more advanced na imputation using prediction e.g. mice - for training only
-
     na_counts = pd.DataFrame(df.isnull().sum(), columns=['Count'])
     full_counts = len(df)
     percent = na_counts.Count / full_counts
     na_counts['Percent'] = percent
+    na_counts.sort_values(by='Percent', ascending=False)
+
     return na_counts
 
 
@@ -161,7 +158,7 @@ def multi_bar_percent(df, col_name, axs, col_n, row_n, target_col_str, target_la
                               color=color_options[c], label=l)
         axs[row_n][col_n].set_title(col_name)
         axs[row_n][col_n].set_xticks(ind)
-        axs[row_n][col_n].set_xticklabels(unique_val)
+        axs[row_n][col_n].set_xticklabels(unique_val, rotation=90)
         axs[row_n][col_n].set_ylabel('% of total')
         axs[row_n][col_n].legend()
         i += 1
@@ -224,7 +221,7 @@ def multi_bar_count(df, col_name, axs, col_n, row_n, target_col_str, target_labe
                               color=color_options[c], label=l)
         axs[row_n][col_n].set_title(col_name)
         axs[row_n][col_n].set_xticks(ind)
-        axs[row_n][col_n].set_xticklabels(unique_val)
+        axs[row_n][col_n].set_xticklabels(unique_val, rotation=90)
         axs[row_n][col_n].set_ylabel('Count')
         axs[row_n][col_n].legend()
         i += 1
@@ -322,9 +319,7 @@ def plot_features(df, target_col_str):
     :return: Matrix of plots for features in df
     """
     # TODO: Handle numerical targets
-    # TODO: Handle date/time features
-    # line chart/ bars by month for date
-
+    # TODO: Handle date/time features - line chart/ bars by month for date
     features = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['float64', 'int64', 'object', 'str']]
     target_labels = df[target_col_str].unique()
 
@@ -353,7 +348,8 @@ def chi_squared(df, target_col_str):
     print('Ho: No significant relationship, feature is independent of target')
     print()
 
-    categorical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['object', 'str']]
+    # categorical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['object', 'str']]
+    categorical_cols = df.select_dtypes(['object']).columns
 
     def chi_test(c):
         print()
@@ -362,24 +358,19 @@ def chi_squared(df, target_col_str):
         exp_under_five_percent = np.sum(expected < 5) / len(expected.flat)
 
         if exp_under_five_percent > 0.2:
-            print('Warning: more than 20% of expected values less than 5, results for {} invalid'.format(c))
+            return None
         else:
-            pass
-
-        print(ct)
-
-        if p < 0.05:
-            print('\np = {}\nSignificant (95% CI)! Reject Ho, {} appears dependent on {}'.format(p, target_col_str, c))
-        else:
-            print('\np = {}\nInsufficient evidence (95% CI). {} and {} appear independent'.format(p, target_col_str, c))
-
-        return p
+            return p
 
     chi_dict = {c: chi_test(c) for c in categorical_cols}
 
     chi_df = pd.DataFrame.from_dict(chi_dict, orient='index')
     chi_df.columns = ['p_value']
+
+    chi_df = chi_df.sort_values(by='p_value', ascending=True)
+
     plt.style.use('fivethirtyeight')
+
     chi_df['p_value'].sort_values(ascending=True).plot(kind='barh', use_index=True, color='deepskyblue',
                                                        title='Chi-squared Test for Independence with Target')
     plt.xlabel('p-value')
@@ -401,7 +392,8 @@ def correlation_plot(df, ax):
     :return: correlations
     """
 
-    numerical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['float64', 'int64']]
+    # numerical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['float64', 'int64']]
+    numerical_cols = df.select_dtypes(include=[np.number]).columns
     corr = df[numerical_cols].corr()
     cmap = sns.diverging_palette(220, 10, as_cmap=True)
 
@@ -415,23 +407,85 @@ def correlation_plot(df, ax):
     return corr
 
 
-def paired_plot(df, target_col_str):
+def correlated_features(df, min_corr):
     """
-    Plots the relationship between numerical features in data by the target
-    Use to test for a relationship between each numerical feature and a categorical target
-    :param df: Pandas DataFrame - recommend limiting the number of features to a max of 10 at a time
-    :param target_col_str: Name of the target feature (string format)
-    :return: paired plot grid
+    Takes a DataFrame and returns pairs of numerical features that meet the minimum specified correlation
+    :param df: Pandas DataFrame
+    :param min_corr: The absolute minimum correlation score to select a feature pair
+    :return: Pandas DataFrame with highly correlated feature pairs sorted by absolute(correlation)
     """
-    # TODO: 2 sample t-test, or ANOVA depending on n of target categories
 
-    numerical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['float64', 'int64']]
-    # numerical_cols.append(target_col_str) # not needed if converted to numerical dtype
+    numerical_cols = df.select_dtypes(include=[np.number]).columns
+    numerical_cols.remove(target_col_str)
+    corr = df[numerical_cols].corr()
+    corr_rule = np.where((corr > min_corr) | (corr < -min_corr))
 
-    data = df[numerical_cols].copy()
-    pp_grid = sns.pairplot(data, hue=target_col_str, size=1)
-    plt.yticks(rotation=0)
-    plt.xticks(rotation=90)
-    plt.title('Paired plot of numerical features and target')
+    high_corr_f = [(corr.index[x], corr.columns[y], corr.values[x, y]) for x, y in zip(*corr_rule)
+                   if x != y and x < y]
 
-    return pp_grid
+    high_corr_df = pd.DataFrame(high_corr_f, columns=['feature 1', 'feature 2', 'correlation'])
+    high_corr_df['abs_corr'] = abs(high_corr_df['correlation'])
+    high_corr_df = high_corr_df.sort_values(by='abs_corr', ascending=False)
+
+    return high_corr_df
+
+
+def point_biserial_corr(df, target_col_str):
+    """
+    Calculate the point-biserial correlation coefficient for each numerical feature against a dichotomous target
+    :param df: Pandas DataFrame
+    :param target_col_str: string name of the dichotomous target column (column should be numerical 0,1)
+    :return: Pandas DataFrame with the correlation coefficient (r) for each feature, sorted by abs(r) 
+    """
+
+    numerical_cols = df.select_dtypes(include=[np.number]).columns
+    numerical_cols.remove('target_col_str')
+    x = df[target_col_str]
+
+    def pc_corr(c):
+        y = df[c]
+        r, p = pointbiserialr(x, y)
+        return r
+
+    pc_dict = {c: pc(c) for c in numerical_cols}
+    pc_df = pd.DataFrame.from_dict(pc_dict, orient='index')
+    pc_df.columns = ['corr']
+    pc_df['corr_abs'] = abs(pc_df['corr'])
+    pc_df = pc_df.sort_values(by='corr_abs', ascending=False)
+
+    return pc_df
+
+
+def plot_score(df, score_col, n, title, log_scale, score_label):
+    """
+    Plot values for a single Pandas Series e.g. to visualise results of a statistical test
+    :param df: Pandas DataFrame
+    :param score_col: str name of column to plot
+    :param n: number of values to plot, sort df prior to plotting take top/bottom n
+    :param title: str title for plot
+    :param log_scale: {True, False} whether a log scale should be used
+    :param score_label: str name for axis
+    :return: plot object
+    """
+
+    plot_s = n * 0.5
+
+    score_plot = df[score_col].head(n).plot(kind='barh', use_index=True, color='deepskyblue',
+                                            figsize=(10, plot_s),
+                                            fontsize=12,
+                                            title=title)
+
+    plt.xlabel(score_label)
+    plt.grid(True, axis='x')
+    plt.grid(False, axis='y')
+    # plt.xlim(-1, 1)
+    plt.gca().invert_yaxis()
+
+    if log_scale == True:
+        plt.xscale('log')
+    else:
+        pass
+
+    plt.show()
+
+    return score_plot
