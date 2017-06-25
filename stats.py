@@ -25,7 +25,6 @@ def df_stats(df):
     columns_n = df.shape[1]
 
     print('The data set contains {} rows and {} columns\n'.format(rows_n, columns_n))
-    print('Summary:')
     print(df.info())
 
     return rows_n, columns_n
@@ -84,10 +83,13 @@ def clean_cats(df):
     :param df: Pandas DataFrame for cleaning
     :return: Pandas DataFrame with cleaned categorical columns
     """
-    categorical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['object', 'str']]
+    categorical_cols = df.select_dtypes(['object']).columns.tolist()
     threshold = len(df) * 0.1
     new_df = df.apply(lambda x: x.mask(x.map(x.value_counts()) < threshold, 'other')
                       if x.name in categorical_cols else x)
+
+    for col in categorical_cols:
+        new_df[col] = new_df[col].astype(np.object)
 
     return new_df
 
@@ -325,7 +327,7 @@ def plot_features(df, target_col_str):
 
     rows_n = len(features)
     columns_n = 3
-    fig, axs = plt.subplots(rows_n, columns_n, figsize=(columns_n*4, rows_n*2), sharey=False, sharex=False)
+    fig, axs = plt.subplots(rows_n, columns_n, figsize=(columns_n*4, rows_n*3), sharey=False, sharex=False)
 
     for i in range(rows_n):
 
@@ -345,14 +347,12 @@ def chi_squared(df, target_col_str):
     :return: p values for chi-squared test
     """
 
-    print('Ho: No significant relationship, feature is independent of target')
-    print()
+    print('Ho: No significant relationship, feature is independent of target\n')
 
-    # categorical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['object', 'str']]
-    categorical_cols = df.select_dtypes(['object']).columns
+    categorical_cols = df.select_dtypes(['object']).columns.tolist()
+    print('Features tested: {}'.format(categorical_cols))
 
     def chi_test(c):
-        print()
         ct = pd.crosstab(df[target_col_str], df[c])
         chi2, p, dof, expected = scs.chi2_contingency(ct)
         exp_under_five_percent = np.sum(expected < 5) / len(expected.flat)
@@ -393,7 +393,7 @@ def correlation_plot(df, ax):
     """
 
     # numerical_cols = [key for key in dict(df.dtypes) if dict(df.dtypes)[key] in ['float64', 'int64']]
-    numerical_cols = df.select_dtypes(include=[np.number]).columns
+    numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     corr = df[numerical_cols].corr()
     cmap = sns.diverging_palette(220, 10, as_cmap=True)
 
@@ -407,15 +407,16 @@ def correlation_plot(df, ax):
     return corr
 
 
-def correlated_features(df, min_corr):
+def correlated_features(df, min_corr, target_col_str):
     """
     Takes a DataFrame and returns pairs of numerical features that meet the minimum specified correlation
     :param df: Pandas DataFrame
     :param min_corr: The absolute minimum correlation score to select a feature pair
+    :param target_col_str: Target str name
     :return: Pandas DataFrame with highly correlated feature pairs sorted by absolute(correlation)
     """
 
-    numerical_cols = df.select_dtypes(include=[np.number]).columns
+    numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     numerical_cols.remove(target_col_str)
     corr = df[numerical_cols].corr()
     corr_rule = np.where((corr > min_corr) | (corr < -min_corr))
@@ -438,8 +439,8 @@ def point_biserial_corr(df, target_col_str):
     :return: Pandas DataFrame with the correlation coefficient (r) for each feature, sorted by abs(r) 
     """
 
-    numerical_cols = df.select_dtypes(include=[np.number]).columns
-    numerical_cols.remove('target_col_str')
+    numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    numerical_cols.remove(target_col_str)
     x = df[target_col_str]
 
     def pc_corr(c):
@@ -447,7 +448,7 @@ def point_biserial_corr(df, target_col_str):
         r, p = pointbiserialr(x, y)
         return r
 
-    pc_dict = {c: pc(c) for c in numerical_cols}
+    pc_dict = {c: pc_corr(c) for c in numerical_cols}
     pc_df = pd.DataFrame.from_dict(pc_dict, orient='index')
     pc_df.columns = ['corr']
     pc_df['corr_abs'] = abs(pc_df['corr'])
